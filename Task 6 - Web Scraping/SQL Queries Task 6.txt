@@ -1,42 +1,52 @@
-# Task 6: Web Scraping and Job Data Analysis
-
+# Import required libraries
+import requests
 from bs4 import BeautifulSoup
 import pandas as pd
-from collections import Counter
 
-# Step 1: Load the sample HTML job listings file
-with open("job_sample.html", "r", encoding="utf-8") as f:
-    html = f.read()
+# Target URL for Data Engineer jobs
+url = "https://remoteok.com/remote-data-engineer-jobs"
 
-# Step 2: Parse the HTML using BeautifulSoup
-soup = BeautifulSoup(html, "html.parser")
+# Headers to mimic a browser request
+headers = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+                  "(KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36"
+}
 
-# Step 3: Extract all job listings
-jobs = soup.find_all("div", class_="job-listing")
+# Fetch the HTML content from the website
+response = requests.get(url, headers=headers)
 
-# Step 4: Extract job title, company, location, and skills from each job
-job_data = []
-for job in jobs:
-    title = job.find("h2", class_="title").text.strip()
-    company = job.find("span", class_="company").text.strip()
-    location = job.find("span", class_="location").text.strip()
-    skills = job.find("div", class_="skills").text.strip()
-    job_data.append([title, company, location, skills])
+# Check if the request was successful
+if response.status_code != 200:
+    print(f"Failed to retrieve page. Status code: {response.status_code}")
+else:
+    # Parse the HTML with BeautifulSoup
+    soup = BeautifulSoup(response.text, "html.parser")
 
-# Step 5: Convert to a pandas DataFrame
-df = pd.DataFrame(job_data, columns=["Job Title", "Company", "Location", "Skills"])
-print("Extracted Data:")
-print(df)
+    # List to store job details
+    jobs = []
 
-# Step 6: Analyze top skills from all listings
-all_skills = []
-for skills in df["Skills"]:
-    all_skills.extend([s.strip() for s in skills.split(",")])
+    # Loop through all job rows
+    for job_row in soup.find_all("tr", class_="job"):
+        title_tag = job_row.find("h2", itemprop="title")
+        company_tag = job_row.find("h3", itemprop="name")
+        location_tag = job_row.find("div", class_="location")
+        link_tag = job_row.find("a", class_="preventLink")
 
-top_skills = Counter(all_skills).most_common(5)
-print("\nTop 5 In-Demand Skills:")
-for skill, count in top_skills:
-    print(f"{skill}: {count}")
+        # Only append if title, company, and link exist
+        if title_tag and company_tag and link_tag:
+            job_info = {
+                "Title": title_tag.text.strip(),
+                "Company": company_tag.text.strip(),
+                "Location": location_tag.text.strip() if location_tag else "Not specified",
+                "Link": "https://remoteok.com" + link_tag["href"]
+            }
+            jobs.append(job_info)
 
-# Step 7 (Optional): Save output to CSV
-df.to_csv("scraped_jobs.csv", index=False)  # CSV file with extracted job data
+    # Convert job list to a DataFrame
+    df = pd.DataFrame(jobs)
+
+    # Display first few results
+    print(df.head())
+
+    # Display total number of jobs scraped
+    print(f"\nTotal jobs scraped: {len(df)}")
